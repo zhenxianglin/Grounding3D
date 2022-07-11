@@ -3,7 +3,7 @@ import torch.nn as nn
 from torchvision.ops import RoIAlign
 from .backbone.pointnet import PointNetPP
 from .backbone.resnet import ResNet
-
+from .vision_language_bert.vil_bert import ViLBert
 
 class LinearBlock(nn.Module):
     def __init__(self, in_size, out_size, linear_layer_num, dropout=0.):
@@ -105,19 +105,18 @@ class ViLBert3D(nn.Module):
         self.point_cloud_extractor = PointCloudExtactor(args)
         self.image_extractor = ImageExtractor(args)
         self.fusion = PointcloudImageFusion(args, self.image_extractor.output_dim)
+        self.matching = ViLBert(args.spatial_dim, args.vilbert_config_path, args.vil_pretrained_file)
     
     def forward(self, image, boxes2d, points, spatial, vis_mask, token, mask, segment_ids):
         # extract point cloud feature
         point_cloud_feature = self.point_cloud_extractor(points)
-        print("point_cloud_feature: ", point_cloud_feature.shape)
 
         # extract image feature
         image_feature = self.image_extractor(image, boxes2d)
-        print("image_feature: ", image_feature.shape)
 
         # fusion
         visual_feature = self.fusion(image_feature, point_cloud_feature)
-        print("visual_feature: ", visual_feature.shape)
 
-
-        return 
+        # matching
+        score = self.matching(token, visual_feature, spatial, segment_ids, mask, vis_mask)
+        return score
