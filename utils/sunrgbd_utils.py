@@ -14,6 +14,7 @@ import numpy as np
 import cv2
 import os
 import scipy.io as sio # to load .mat files for depth points
+from scipy.spatial import Delaunay
 
 type2class={'bed':0, 'table':1, 'sofa':2, 'chair':3, 'toilet':4, 'desk':5, 'dresser':6, 'night_stand':7, 'bookshelf':8, 'bathtub':9}
 class2type = {type2class[t]:t for t in type2class}
@@ -205,8 +206,7 @@ def random_shift_box2d(box2d, shift_ratio=0.1):
     return np.array([cx2-w2/2.0, cy2-h2/2.0, cx2+w2/2.0, cy2+h2/2.0])
  
 def in_hull(p, hull):
-    from scipy.spatial import Delaunay
-    if not isinstance(hull,Delaunay):
+    if not isinstance(hull, Delaunay):
         hull = Delaunay(hull)
     return hull.find_simplex(p)>=0
 
@@ -283,7 +283,10 @@ def batch_extract_pc_in_box3d(pc, boxes3d, sample_points_num):
     objects_pc = []
     for i in range(len(boxes3d)):
         box3d = my_compute_box_3d(boxes3d[i][0:3], boxes3d[i][3:6], boxes3d[i][6])
-        obj_pc, pc_ind = extract_pc_in_box3d(pc.copy(), box3d)
+        try:
+            obj_pc, pc_ind = extract_pc_in_box3d(pc.copy(), box3d)
+        except:
+            obj_pc = np.zeros((sample_points_num, 3))
         if obj_pc.shape[0] == 0:
             obj_pc = np.zeros((sample_points_num, 3))
         else:
@@ -291,39 +294,6 @@ def batch_extract_pc_in_box3d(pc, boxes3d, sample_points_num):
         objects_pc.append(obj_pc)
     objects_pc = np.stack(objects_pc, axis=0)
     return objects_pc
-
-# def compute_box_3d(obj, calib):
-#     ''' Takes an object and a projection matrix (P) and projects the 3d
-#         bounding box into the image plane.
-#         Returns:
-#             corners_2d: (8,2) array in image coord.
-#             corners_3d: (8,3) array in in upright depth coord.
-#     '''
-#     center = obj.centroid
-
-#     # compute rotational matrix around yaw axis
-#     R = rotz(-1*obj.heading_angle)
-#     #b,a,c = dimension
-#     #print R, a,b,c
-    
-#     # 3d bounding box dimensions
-#     l = obj.l # along heading arrow
-#     w = obj.w # perpendicular to heading arrow
-#     h = obj.h
-
-#     # rotate and translate 3d bounding box
-#     x_corners = [-l,l,l,-l,-l,l,l,-l]
-#     y_corners = [w,w,-w,-w,w,w,-w,-w]
-#     z_corners = [h,h,h,h,-h,-h,-h,-h]
-#     corners_3d = np.dot(R, np.vstack([x_corners, y_corners, z_corners]))
-#     corners_3d[0,:] += center[0]
-#     corners_3d[1,:] += center[1]
-#     corners_3d[2,:] += center[2]
-
-#     # project the 3d bounding box into the image plane
-#     corners_2d,_ = calib.project_upright_depth_to_image(np.transpose(corners_3d))
-#     #print 'corners_2d: ', corners_2d
-#     return corners_2d, np.transpose(corners_3d)
 
 def compute_orientation_3d(obj, calib):
     ''' Takes an object and a projection matrix (P) and projects the 3d

@@ -5,3 +5,4 @@ scipy
 tensorboardX
 tqdm
 trimesh
+shapely==1.8.2

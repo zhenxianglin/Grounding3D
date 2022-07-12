@@ -4,12 +4,15 @@ import numpy as np
 from torch.utils.data import Dataset
 import json
 from utils import sunrgbd_utils
+from utils.metrics import cal_accuracy
 from pytorch_transformers.tokenization_bert import BertTokenizer
 import cv2
-
+import scipy
+import random
 class SUNREFER(Dataset):
     def __init__(self, args, split):
         super().__init__()
+        self.split = split
         if split == 'train':
             self.data_path = os.path.join(args.data_path, 'train_sunrefer.json')
         elif split == 'val':
@@ -20,16 +23,28 @@ class SUNREFER(Dataset):
         self.tokenizer = BertTokenizer.from_pretrained(args.bert_model)
 
         self.data_type = torch.float32
+    
+    # def __getitem__(self, index):
+    #     out = None
+    #     while out is None and self.split == 'train':
+    #         try:
+    #             out = self.getitem(index)
+    #         except:
+    #             index = random.randint(0, len(self.sunrefer))
+    #     return out
+
 
     def __getitem__(self, index):
+        
         data = self.sunrefer[index]
-
         # read image
         image_path = data['image_path']
         image = sunrgbd_utils.load_image(image_path)
         img_y_size, img_x_size, dim = image.shape
         image = cv2.resize(image, (self.x_size, self.y_size))
         image = image.transpose((2, 0, 1))
+
+        # print(data['sentences'])
 
         # bboxes2d
         boxes2d = []
@@ -132,7 +147,7 @@ class SUNREFER(Dataset):
 
         # target
         object_id_list = raw_batch[5]
-        target = torch.zeros((len(boxes2d_list), max_obj_num), dtype=torch.long)
+        target = torch.zeros((len(boxes2d_list), max_obj_num), dtype=self.data_type)
         for i, object_id in enumerate(object_id_list):
             target[i, object_id] = 1
 
@@ -140,3 +155,34 @@ class SUNREFER(Dataset):
     
     def __len__(self):
         return len(self.sunrefer)
+    
+    def evaluate(self, index_list):
+        # from sklearn.metrics import accuracy_score
+        target_boxes = []
+        pred_boxes = []
+        target_objects = []
+        for i, max_index in enumerate(index_list):
+            data = self.sunrefer[i]
+            object_id = int(data['object_id'])
+            boxes3d = np.array(data['boxes'], dtype=np.float32)
+
+            target = boxes3d[object_id]
+            pred_box = boxes3d[max_index]
+         
+            target_objects.append(object_id)
+            pred_boxes.append(pred_box)
+            target_boxes.append(target)
+        
+        target_boxes = np.array(target_boxes)
+        pred_boxes = np.array(pred_boxes)
+
+        target_boxes[:, 3:6] *= 2
+        pred_boxes[:, 3:6] *= 2
+        target_boxes[:, 6] *= -1
+        pred_boxes[:, 6] *= -1
+
+        acc25, acc50, miou = cal_accuracy(pred_boxes, target_boxes)
+        # print(acc25, acc50, miou)
+        # acc = accuracy_score(target_objects, index_list)
+        # print(acc)
+        return acc25, acc50, miou
