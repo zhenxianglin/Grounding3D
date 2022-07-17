@@ -1,0 +1,9 @@
+# .gitignore
+work_dir/*
+visualize/*
+pretrained_model/multi_task_model.bin
+engine/*
+# *.pyc
+__pycache__/
+detection2d.zip
+detection3d.zip
