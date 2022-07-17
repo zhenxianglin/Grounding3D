@@ -13,6 +13,26 @@ from time import time
 from utils import Logger
 from tqdm import tqdm
 
+from torch import distributed as dist
+from torch.nn.parallel import DistributedDataParallel, DataParallel
+from torch.utils.data import DistributedSampler
+
+def init_dist():
+    # TODO: use local_rank instead of rank % num_gpus
+    rank = int(os.environ['RANK'])
+    num_gpus = torch.cuda.device_count()
+    torch.cuda.set_device(rank % num_gpus)
+    dist.init_process_group(backend='nccl')
+
+def get_dist_info():
+    if dist.is_available() and dist.is_initialized():
+        rank = dist.get_rank()
+        world_size = dist.get_world_size()
+    else:
+        rank = 0
+        world_size = 1
+    return rank, world_size
+
 def set_random_seed(seed):
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -51,10 +71,20 @@ def get_args_parser():
     parser.add_argument('--seed', default=42, type=int)
     parser.add_argument('--val_epoch', default=10, type=int)
     parser.add_argument('--no_verbose', action='store_true', help="If true, not print information")
-    parser.add_argument('--work_dir', default='work_dir/vil_bert3d', type=str)
+    parser.add_argument('--work_dir', default='work_dir/vil_bert3d_dist', type=str)
+    parser.add_argument('--local_rank', type=int, default=0)
+    parser.add_argument('--dist', action='store_true')
     args = parser.parse_args()
+    args.nprocs = torch.cuda.device_count()
+    # if 'LOCAL_RANK' not in os.environ:
+    #     os.environ['LOCAL_RANK'] = str(args.local_rank)
     return args
 
+def reduce_mean(tensor, nprocs):
+    rt = tensor.clone()
+    dist.all_reduce(rt, op=dist.ReduceOp.SUM)
+    rt /= nprocs
+    return rt
 
 def train_epoch(epoch: int, dataloader, model,\
                  criterion, optimizer, scheduler, total_epoch: int, logger=None):
@@ -72,14 +102,22 @@ def train_epoch(epoch: int, dataloader, model,\
         segment_ids = segment_ids.cuda()
         target = target.cuda()
 
-        scores = model(image, boxes2d, points, spatial, vis_mask, token, mask, segment_ids)   
+        scores = model(image, boxes2d, points, spatial, vis_mask, token, mask, segment_ids)  
         optimizer.zero_grad()
         loss = criterion(scores, target)
+
+        # print(1, loss)
+        torch.distributed.barrier()
+        # print(f"目前进程 {args.local_rank}")
+        # print(2, loss)
+        loss = reduce_mean(loss, args.nprocs)
+        # print(3, loss)
+
         mean_loss += loss.item() / len(dataloader)
         loss.backward()
         optimizer.step()
         end_time = time()
-        if idx % 50 == 0:
+        if logger is not None and idx % 50 == 0:
             used_time = end_time - start_time
             rest_epoch = total_epoch - epoch
             eta = rest_epoch * len(dataloader) * used_time - idx * used_time  # second
@@ -121,24 +159,38 @@ def validate(dataset, dataloader, model, criterion=None):
     loss = loss / len(dataloader)
     return acc25, acc50, m_iou, loss
 
-def train(args, train_dataset, val_dataset, model, criterion, optimizer, scheduler, epoch, logger=None):
+def train(args, train_dataset, val_dataset, model, criterion, optimizer, scheduler, epoch, logger=None):    
     start = time()
-    train_dataloader = DataLoader(train_dataset, args.batch_size, shuffle=True, 
-                                    num_workers=args.num_workers, collate_fn=train_dataset.collate_fn)
-    val_dataloader_list = [
-        DataLoader(val_dataset[i], 1, shuffle=False, 
-                                    num_workers=args.num_workers, collate_fn=train_dataset.collate_fn) for i in range(len(val_dataset))
-    ]                               
-    val_name = ['Val1', 'Val2']
+    rank, world_size = get_dist_info()
+    if args.dist:
+        args.batch_size = int(args.batch_size / args.nprocs)
+        sampler = DistributedSampler(train_dataset, world_size, rank, shuffle=True, seed=args.seed)
+        train_dataloader = DataLoader(train_dataset, args.batch_size, shuffle=False, sampler=sampler, pin_memory=True,
+                                        num_workers=args.num_workers, collate_fn=train_dataset.collate_fn)
+        # train_dataloader = DataLoader(train_dataset, args.batch_size, shuffle=True,
+        #                                 num_workers=args.num_workers, collate_fn=train_dataset.collate_fn)
+    else:
+        train_dataloader = DataLoader(train_dataset, args.batch_size, shuffle=True,
+                                        num_workers=args.num_workers, collate_fn=train_dataset.collate_fn)
+    if args.local_rank == 0:
+        val_dataloader_list = [
+            DataLoader(val_dataset[i], 1, shuffle=False, 
+                                        num_workers=args.num_workers, collate_fn=train_dataset.collate_fn) for i in range(len(val_dataset))
+        ]                               
+        val_name = ['Val1', 'Val2']
     for ep in range(epoch):
         mean_loss = train_epoch(ep, train_dataloader, model, criterion, optimizer, scheduler, epoch, logger)
-        logger.save_model(model, f"epoch_{ep+1}_model.pth")
-        if not args.no_evaluate and ((ep+1) % args.val_epoch == 0):
-            for i, val_loader in enumerate(val_dataloader_list):
-                acc25, acc50, m_iou, loss = validate(val_dataset[i], val_loader, model, criterion=criterion)
-                info = f"{val_name[i]} Epoch[{ep}]\tacc25={acc25}\tacc50={acc50}\tm_iou={m_iou}\tloss={loss}"
-                print(info)
-                logger(info)
+        if  args.local_rank == 0:
+            if args.dist:
+                logger.save_model(model.module, f"epoch_{ep+1}_model.pth")
+            else:
+                logger.save_model(model, f"epoch_{ep+1}_model.pth")
+            if not args.no_evaluate and ((ep+1) % args.val_epoch == 0):
+                for i, val_loader in enumerate(val_dataloader_list):
+                    acc25, acc50, m_iou, loss = validate(val_dataset[i], val_loader, model, criterion=criterion)
+                    info = f"{val_name[i]} Epoch[{ep}]\tacc25={acc25}\tacc50={acc50}\tm_iou={m_iou}\tloss={loss}"
+                    print(info)
+                    logger(info)
 
     used_time = time() - start
     sec = int(used_time % 60)
@@ -150,26 +202,48 @@ def train(args, train_dataset, val_dataset, model, criterion, optimizer, schedul
 def main(args):
     set_random_seed(args.seed)
 
+    if args.dist:
+        init_dist()
+        # re-set gpu_ids with distributed training mode
+        rank, world_size = get_dist_info()
+        gpu_ids = range(world_size)
+    
     print("Create dataset")
     train_dataset = create_dataset(args, 'train')
     val_dataset1 = create_dataset(args, 'val')
     # val_dataset2 = create_dataset(args, 'train')
     # val_dataset = [val_dataset1, val_dataset2]
     val_dataset = [val_dataset1]
-                                
+                      
     print("Create Model")
-    model = create_model(args).cuda()
+    model = create_model(args)
+    if args.dist:
+        model = model.cuda()
+        model = DistributedDataParallel(model, device_ids=[rank], find_unused_parameters=True)
+        # model = DataParallel(model, device_ids=range(gpu_num))
 
-    print("Create Logger")
-    logger = Logger(args.work_dir)
+    
+    if args.local_rank == 0:
+        print("Create Logger")
+        logger = Logger(args.work_dir)
+    else:
+        logger = None
 
     print("Create optimizer")
-    param_list=[
-            {'params':model.point_cloud_extractor.parameters(),'lr':args.lr},
-            {'params':model.image_extractor.parameters(),'lr':args.lr},
-            {'params':model.fusion.parameters(),'lr':args.lr},
-            {'params':model.matching.parameters(), 'lr':args.lr_bert},
-        ]
+    if args.dist:
+        param_list=[
+                {'params':model.module.point_cloud_extractor.parameters(),'lr':args.lr},
+                {'params':model.module.image_extractor.parameters(),'lr':args.lr},
+                {'params':model.module.fusion.parameters(),'lr':args.lr},
+                {'params':model.module.matching.parameters(), 'lr':args.lr_bert},
+            ]
+    else:
+        param_list=[
+                {'params':model.point_cloud_extractor.parameters(),'lr':args.lr},
+                {'params':model.image_extractor.parameters(),'lr':args.lr},
+                {'params':model.fusion.parameters(),'lr':args.lr},
+                {'params':model.matching.parameters(), 'lr':args.lr_bert},
+            ]
     optimizer = torch.optim.AdamW(param_list, lr=args.lr)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [40, 50, 60, 70, 80, 90], gamma=0.65)
     criterion = torch.nn.BCEWithLogitsLoss()

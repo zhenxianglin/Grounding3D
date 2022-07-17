@@ -186,3 +186,48 @@ class SUNREFER(Dataset):
         # acc = accuracy_score(target_objects, index_list)
         # print(acc)
         return acc25, acc50, miou
+    
+    def visualize(self, args, index_list):
+        import matplotlib.pyplot as plt
+        base_path = args.vis_path
+
+        if not os.path.exists(base_path):
+            os.makedirs(base_path)
+
+        for i, max_index in enumerate(index_list):
+            data = self.sunrefer[i]
+            object_id = int(data['object_id'])
+            boxes3d = np.array(data['boxes'], dtype=np.float32)
+            target = boxes3d[object_id]
+            pred_box = boxes3d[max_index]
+
+            image_path = data['image_path']
+            img = cv2.imread(image_path)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+            target_corners_2d, _ = sunrgbd_utils.compute_box_3d(target, data['calib_path'])
+            pred_corners_2d, _ = sunrgbd_utils.compute_box_3d(pred_box, data['calib_path'])
+
+            img = sunrgbd_utils.draw_projected_box3d(img, target_corners_2d, (255, 0, 0), thickness=2)
+            img = sunrgbd_utils.draw_projected_box3d(img, pred_corners_2d, (0, 255, 0), thickness=2)
+
+            filepath = os.path.join(base_path, f"{i}.jpg")
+            # fig = plt.figure(figsize=())
+            sentence = data['sentences']
+            sentence = sentence.split()
+            if len(sentence) > 8:
+                sentence.insert(8, '\n')
+            if len(sentence) > 16:
+                sentence.insert(16, '\n')
+            sentence = ' '.join(sentence)
+            plt.imshow(img)
+            plt.axis('off')
+            plt.title(f"{sentence}")
+            plt.savefig(filepath, bbox_inches='tight')
+
+            plt.clf()
+            plt.close()
+
+
+
+        return
