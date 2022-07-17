@@ -1,6 +1,8 @@
 # pip install mmcv-full -f https://download.openmmlab.com/mmcv/dist/cu113/torch1.11.0/index.html
-# cd detection2d
+# pip install mmdet==2.24.0
+# pip install mmsegmentation==0.20.0
+# cd detection3d
 # pip install -v -e .
 # cd ..
 
-pip install pytorch_transformers
+# pip install pytorch_transformers
