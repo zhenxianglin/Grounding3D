@@ -109,6 +109,7 @@ class SUNRGBDData(object):
     def get_depth(self, idx):
         depth_filename = osp.join(self.depth_dir, f'{idx:06d}.mat')
         depth = sio.loadmat(depth_filename)['instance']
+        print(idx, depth_filename)
         return depth
 
     def get_calibration(self, idx):
@@ -218,9 +219,8 @@ class SUNRGBDData(object):
                         axis=0)  # (K,8)
                 info['annos'] = annotations
             return info
-
-        sample_id_list = sample_id_list if \
-            sample_id_list is not None else self.sample_id_list
+        
+        sample_id_list = sample_id_list if sample_id_list is not None else self.sample_id_list
         with futures.ThreadPoolExecutor(num_workers) as executor:
             infos = executor.map(process_single_scene, sample_id_list)
         return list(infos)

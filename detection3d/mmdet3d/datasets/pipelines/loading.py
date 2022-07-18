@@ -402,7 +402,6 @@ class LoadPointsFromFile(object):
                 points = np.load(pts_filename)
             else:
                 points = np.fromfile(pts_filename, dtype=np.float32)
-
         return points
 
     def __call__(self, results):

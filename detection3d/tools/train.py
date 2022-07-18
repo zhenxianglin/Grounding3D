@@ -29,6 +29,7 @@ try:
 except ImportError:
     from mmdet3d.utils import setup_multi_processes
 
+import datetime
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
@@ -62,7 +63,7 @@ def parse_args():
         default=0,
         help='number of gpus to use '
         '(only applicable to non-distributed training)')
-    parser.add_argument('--seed', type=int, default=0, help='random seed')
+    parser.add_argument('--seed', type=int, default=42, help='random seed')
     parser.add_argument(
         '--diff-seed',
         action='store_true',
@@ -133,8 +134,15 @@ def main():
         cfg.work_dir = args.work_dir
     elif cfg.get('work_dir', None) is None:
         # use config filename as default work_dir if cfg.work_dir is None
-        cfg.work_dir = osp.join('./work_dirs',
-                                osp.splitext(osp.basename(args.config))[0])
+        cfg.work_dir = osp.join('./work_dirs', osp.splitext(osp.basename(args.config))[0])
+    
+    current_date = datetime.datetime.now()
+    month = current_date.month
+    day = current_date.day
+    hour = current_date.hour
+    minute = current_date.minute
+    cfg.work_dir = osp.join(cfg.work_dir, f"{month}-{day}-{hour}-{minute}")
+
     if args.resume_from is not None:
         cfg.resume_from = args.resume_from
 
