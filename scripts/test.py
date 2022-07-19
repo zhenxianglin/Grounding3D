@@ -79,16 +79,17 @@ def test(args, dataset, dataloader, model):
         max_index.append(index)
     max_index = np.hstack(max_index)
     acc25, acc50, m_iou = dataset.evaluate(max_index)
+    print(f"acc25={acc25}, acc50={acc50}, miou={m_iou}")
     if not args.no_vis:
         dataset.visualize(args, max_index)
-    print(f"acc25={acc25}, acc50={acc50}, miou={m_iou}")
+    
 
 def main(args):
     set_random_seed(args.seed)
 
     print("Create dataset")
     dataset = create_dataset(args, 'val')
-    dataloader = DataLoader(dataset, 16, shuffle=False, num_workers=args.num_workers, collate_fn=dataset.collate_fn)
+    dataloader = DataLoader(dataset, 1, shuffle=False, num_workers=args.num_workers, collate_fn=dataset.collate_fn)
     
     print("Load Model")
     model = create_model(args).cuda()
