@@ -20,7 +20,7 @@ def set_random_seed(seed):
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Set transformer detector')
-    parser.add_argument('--dataset', default='sunrefer', type=str, help='sunrefer')
+    parser.add_argument('--dataset', default='sunrefer_predet', type=str, help='sunrefer', choices=['sunrefer', 'sunrefer_predet'])
     parser.add_argument('--data_path', default='data', type=str, help='point cloud path')
     parser.add_argument('--max_seq_len', default=50, type=int)
     parser.add_argument('--sample_points_num', default=3000, type=int, help='number of sampling points')

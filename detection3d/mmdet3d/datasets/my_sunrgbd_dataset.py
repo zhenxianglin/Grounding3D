@@ -68,7 +68,7 @@ class MySUNRGBDDataset(Custom3DDataset):
         assert 'use_camera' in self.modality and 'use_lidar' in self.modality
         assert self.modality['use_camera'] or self.modality['use_lidar']
 
-        # self.data_infos = self.data_infos[:10]
+        # self.data_infos = self.data_infos[:5]
 
     def get_data_info(self, index):
         """Get data info according to the given index.
@@ -260,7 +260,7 @@ class MySUNRGBDDataset(Custom3DDataset):
         """
         # evaluate 3D detection performance
         
-        RESULTS = False
+        RESULTS = True
         if RESULTS:
             print()
             import os 
@@ -274,7 +274,11 @@ class MySUNRGBDDataset(Custom3DDataset):
             for r in tqdm(results):
                 info = self.data_infos[idx]
                 image_id = "{:06}".format(info['point_cloud']['lidar_idx'])
+
                 boxes = r['boxes_3d'].tensor.detach().numpy()
+                boxes[:, 2] += boxes[:, 5] / 2
+                # boxes = r['boxes_3d'].corners.detach().numpy()
+
                 boxes_path = os.path.join(BASE_PATH, f"{image_id}.npy")
                 np.save(boxes_path, boxes)
 

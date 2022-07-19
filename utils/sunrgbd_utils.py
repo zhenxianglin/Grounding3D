@@ -228,12 +228,15 @@ def my_compute_box_3d(center, size, heading_angle):
     return np.transpose(corners_3d)
 
 def batch_compute_box_3d(objects, calib_path):
-    box_to_2d = []
+    corners2d = []
+    corners3d = []
     for obj in objects:
-        corners_2d, _ = compute_box_3d(obj, calib_path)
-        box_to_2d.append(corners_2d)
-    box_to_2d = np.stack(box_to_2d, axis=0)
-    return box_to_2d
+        corner_2d, corner_3d = compute_box_3d(obj, calib_path)
+        corners2d.append(corner_2d)
+        corners3d.append(corner_3d)
+    corners2d = np.stack(corners2d, axis=0)
+    corners3d = np.stack(corners3d, axis=0)
+    return corners2d, corners3d
 
 def compute_box_3d(obj, calib_path):
     ''' Takes an object and a projection matrix (P) and projects the 3d
@@ -283,10 +286,7 @@ def batch_extract_pc_in_box3d(pc, boxes3d, sample_points_num):
     objects_pc = []
     for i in range(len(boxes3d)):
         box3d = my_compute_box_3d(boxes3d[i][0:3], boxes3d[i][3:6], boxes3d[i][6])
-        try:
-            obj_pc, pc_ind = extract_pc_in_box3d(pc.copy(), box3d)
-        except:
-            obj_pc = np.zeros((sample_points_num, 3))
+        obj_pc, pc_ind = extract_pc_in_box3d(pc.copy(), box3d)
         if obj_pc.shape[0] == 0:
             obj_pc = np.zeros((sample_points_num, 3))
         else:

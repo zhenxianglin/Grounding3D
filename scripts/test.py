@@ -20,7 +20,7 @@ def set_random_seed(seed):
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Set transformer detector')
-    parser.add_argument('--dataset', default='sunrefer', type=str, help='sunrefer')
+    parser.add_argument('--dataset', default='sunrefer_predet', type=str, help='sunrefer', choices=['sunrefer', 'sunrefer_predet'])
     parser.add_argument('--data_path', default='data', type=str, help='point cloud path')
     parser.add_argument('--max_seq_len', default=50, type=int)
     parser.add_argument('--sample_points_num', default=3000, type=int, help='number of sampling points')
@@ -53,7 +53,7 @@ def get_args_parser():
     parser.add_argument('--no_verbose', action='store_true', help="If true, not print information")
     parser.add_argument('--work_dir', default='work_dir/vil_bert3d', type=str)
 
-    parser.add_argument('--eval_path', default='work_dir/vil_bert3d/7-11-20-14-17/epoch_10_model.pth', type=str)
+    parser.add_argument('--eval_path', default='work_dir/vil_bert3d_dist/sunrefer/7-19-17-37-29/epoch_1_model.pth', type=str)
     parser.add_argument('--no_vis', action='store_true', help="no visualization")
     parser.add_argument('--vis_path', default='visualize/vilbert3d', type=str)
     args = parser.parse_args()
@@ -75,8 +75,9 @@ def test(args, dataset, dataloader, model):
         segment_ids = segment_ids.cuda()
         target = target.cuda()
         logits = model(image, boxes2d, points, spatial, vis_mask, token, mask, segment_ids)
-        index = torch.topk(logits[0], 1)[1].item()
+        index = torch.flatten(torch.topk(logits, 1).indices).cpu().detach().numpy()
         max_index.append(index)
+    max_index = np.hstack(max_index)
     acc25, acc50, m_iou = dataset.evaluate(max_index)
     if not args.no_vis:
         dataset.visualize(args, max_index)
@@ -87,8 +88,8 @@ def main(args):
 
     print("Create dataset")
     dataset = create_dataset(args, 'val')
-    dataloader = DataLoader(dataset, 1, shuffle=False, num_workers=args.num_workers, collate_fn=dataset.collate_fn)
-                                
+    dataloader = DataLoader(dataset, 16, shuffle=False, num_workers=args.num_workers, collate_fn=dataset.collate_fn)
+    
     print("Load Model")
     model = create_model(args).cuda()
     model.load_state_dict(torch.load(args.eval_path))

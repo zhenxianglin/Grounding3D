@@ -40,7 +40,7 @@ def set_random_seed(seed):
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Set transformer detector')
-    parser.add_argument('--dataset', default='sunrefer', type=str, help='sunrefer')
+    parser.add_argument('--dataset', default='sunrefer_predet', type=str, help='sunrefer', choices=['sunrefer', 'sunrefer_predet'])
     parser.add_argument('--data_path', default='data', type=str, help='point cloud path')
     parser.add_argument('--max_seq_len', default=50, type=int)
     parser.add_argument('--sample_points_num', default=3000, type=int, help='number of sampling points')
@@ -71,7 +71,7 @@ def get_args_parser():
     parser.add_argument('--seed', default=42, type=int)
     parser.add_argument('--val_epoch', default=10, type=int)
     parser.add_argument('--no_verbose', action='store_true', help="If true, not print information")
-    parser.add_argument('--work_dir', default='work_dir/vil_bert3d_dist', type=str)
+    parser.add_argument('--work_dir', default='work_dir/vil_bert3d_dist/sunrefer', type=str)
     parser.add_argument('--local_rank', type=int, default=0)
     parser.add_argument('--dist', action='store_true')
     args = parser.parse_args()
@@ -126,7 +126,7 @@ def train_epoch(epoch: int, dataloader, model,\
             hour = int(eta % (24 * 3600) // 3600)
             day = int(eta // (24 * 3600))
 
-            info = f"TRN Epoch[{epoch}][{idx}|{len(dataloader)}]\tloss={round(loss.item(), 4)}\t"\
+            info = f"TRN Epoch[{epoch+1}][{idx}|{len(dataloader)}]\tloss={round(loss.item(), 4)}\t"\
                    f"lr={optimizer.param_groups[0]['lr']}\tbert_lr={optimizer.param_groups[3]['lr']}\t"\
                    f"ETA: {day} days {hour} hours {minute} mins {sec} secs"
             print(info)
@@ -150,34 +150,51 @@ def validate(dataset, dataloader, model, criterion=None):
         segment_ids = segment_ids.cuda()
         target = target.cuda()
         logits = model(image, boxes2d, points, spatial, vis_mask, token, mask, segment_ids)
+
         if criterion:
             each_loss = criterion(logits, target)
             loss += each_loss.item()
-        index = torch.topk(logits[0], 1)[1].item()
+ 
+        index = torch.flatten(torch.topk(logits, 1).indices).cpu().detach().numpy()
         max_index.append(index)
+
+    max_index = np.hstack(max_index)
+    print(max_index.shape)
     acc25, acc50, m_iou = dataset.evaluate(max_index)
-    loss = loss / len(dataloader)
-    return acc25, acc50, m_iou, loss
+    if criterion:
+        loss = loss / len(dataloader)
+        return acc25, acc50, m_iou, loss
+    else:
+        return acc25, acc50, m_iou, 'None'
 
 def train(args, train_dataset, val_dataset, model, criterion, optimizer, scheduler, epoch, logger=None):    
     start = time()
     rank, world_size = get_dist_info()
     if args.dist:
-        args.batch_size = int(args.batch_size / args.nprocs)
+        batch_size = int(args.batch_size / args.nprocs)
         sampler = DistributedSampler(train_dataset, world_size, rank, shuffle=True, seed=args.seed)
-        train_dataloader = DataLoader(train_dataset, args.batch_size, shuffle=False, sampler=sampler, pin_memory=True,
+        train_dataloader = DataLoader(train_dataset, batch_size, shuffle=False, sampler=sampler, pin_memory=True,
                                         num_workers=args.num_workers, collate_fn=train_dataset.collate_fn)
-        # train_dataloader = DataLoader(train_dataset, args.batch_size, shuffle=True,
-        #                                 num_workers=args.num_workers, collate_fn=train_dataset.collate_fn)
     else:
         train_dataloader = DataLoader(train_dataset, args.batch_size, shuffle=True,
                                         num_workers=args.num_workers, collate_fn=train_dataset.collate_fn)
-    if args.local_rank == 0:
+    
+    if args.dist:
+        if args.local_rank == 0:
+            if args.dist:
+                batch_size = int(args.batch_size / args.nprocs)
+            val_dataloader_list = [
+                DataLoader(val_dataset[i], batch_size, shuffle=False, 
+                            num_workers=args.num_workers, collate_fn=train_dataset.collate_fn) for i in range(len(val_dataset))
+            ]
+            val_name = [f'Val{i+1}' for i in range(len(val_dataloader_list))]
+    else:
         val_dataloader_list = [
-            DataLoader(val_dataset[i], 1, shuffle=False, 
-                                        num_workers=args.num_workers, collate_fn=train_dataset.collate_fn) for i in range(len(val_dataset))
-        ]                               
-        val_name = ['Val1', 'Val2']
+                DataLoader(val_dataset[i], args.batch_size, shuffle=False, 
+                            num_workers=args.num_workers, collate_fn=train_dataset.collate_fn) for i in range(len(val_dataset))
+            ]
+        val_name = [f'Val{i+1}' for i in range(len(val_dataloader_list))]
+    
     for ep in range(epoch):
         mean_loss = train_epoch(ep, train_dataloader, model, criterion, optimizer, scheduler, epoch, logger)
         if  args.local_rank == 0:
@@ -188,7 +205,7 @@ def train(args, train_dataset, val_dataset, model, criterion, optimizer, schedul
             if not args.no_evaluate and ((ep+1) % args.val_epoch == 0):
                 for i, val_loader in enumerate(val_dataloader_list):
                     acc25, acc50, m_iou, loss = validate(val_dataset[i], val_loader, model, criterion=criterion)
-                    info = f"{val_name[i]} Epoch[{ep}]\tacc25={acc25}\tacc50={acc50}\tm_iou={m_iou}\tloss={loss}"
+                    info = f"{val_name[i]} Epoch[{ep+1}]\tacc25={acc25}\tacc50={acc50}\tm_iou={m_iou}\tloss={loss}"
                     print(info)
                     logger(info)
 
