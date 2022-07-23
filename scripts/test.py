@@ -53,9 +53,9 @@ def get_args_parser():
     parser.add_argument('--no_verbose', action='store_true', help="If true, not print information")
     parser.add_argument('--work_dir', default='work_dir/vil_bert3d', type=str)
 
-    parser.add_argument('--eval_path', default='work_dir/vil_bert3d_dist/sunrefer/7-19-17-37-29/epoch_1_model.pth', type=str)
+    parser.add_argument('--eval_path', default='work_dir/vil_bert3d_dist/sunrefer/7-20-6-59-50/epoch_55_model.pth', type=str)
     parser.add_argument('--no_vis', action='store_true', help="no visualization")
-    parser.add_argument('--vis_path', default='visualize/vilbert3d', type=str)
+    parser.add_argument('--vis_path', default='visualize/vilbert3d/sunrefer', type=str)
     args = parser.parse_args()
     return args
 
@@ -89,7 +89,7 @@ def main(args):
 
     print("Create dataset")
     dataset = create_dataset(args, 'val')
-    dataloader = DataLoader(dataset, 1, shuffle=False, num_workers=args.num_workers, collate_fn=dataset.collate_fn)
+    dataloader = DataLoader(dataset, args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=dataset.collate_fn)
     
     print("Load Model")
     model = create_model(args).cuda()

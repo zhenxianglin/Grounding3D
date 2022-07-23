@@ -9,6 +9,8 @@ from pytorch_transformers.tokenization_bert import BertTokenizer
 import cv2
 import scipy
 import random
+from tqdm import tqdm
+
 class SUNREFER(Dataset):
     def __init__(self, args, split):
         super().__init__()
@@ -239,13 +241,15 @@ class SUNREFER_PREDET(SUNREFER):
 
         # spatial
         boxes3d = np.load(f"detection_results/sunrefer/{data['image_id']}.npy")
+        boxes3d[:, 3:6] /= 2
+        boxes3d[:, 6] *= -1
         objects_pc = sunrgbd_utils.batch_extract_pc_in_box3d(points, boxes3d, self.sample_points_num)
         corners2d, corners3d = sunrgbd_utils.batch_compute_box_3d(boxes3d, data['calib_path'])
 
         spatial = []
         for i in range(len(boxes3d)):
             x, _, _, l, w, h, _ = boxes3d[i]
-            l, w, h = l*2, w*2, h*2
+            # l, w, h = l*2, w*2, h*2
             eachbox_2d = corners2d[i]
             eachbox_2d[:, 0][eachbox_2d[:, 0]<0] = 0
             eachbox_2d[:, 0][eachbox_2d[:, 0]>=img_x_size] = img_x_size-1
@@ -280,6 +284,8 @@ class SUNREFER_PREDET(SUNREFER):
         target_box = np.array(data['object_box'], dtype=np.float32)
         target_box[3:6] *= 2
         target_box[6] *= -1
+        boxes3d[:, 3:6] *= 2
+        boxes3d[:, 6] *= -1
         for i, box in enumerate(boxes3d):
             iou = pc_utils.cal_iou3d(target_box, box)
             target[i] = 1 if iou >= threshold else 0
@@ -351,7 +357,6 @@ class SUNREFER_PREDET(SUNREFER):
         return image, boxes2d, points, spatial, vis_mask, token, mask, segment_ids, target
     
     def evaluate(self, index_list):
-        from tqdm import tqdm
         target_boxes = []
         pred_boxes = []
         idx = 0
@@ -382,7 +387,7 @@ class SUNREFER_PREDET(SUNREFER):
             os.makedirs(base_path)
 
         idx = 0
-        for max_index in enumerate(index_list):
+        for max_index in tqdm(index_list):
             data = self.sunrefer[idx]
             boxes3d = np.load(f"detection_results/sunrefer/{data['image_id']}.npy")
             pred_box = boxes3d[max_index]
@@ -391,6 +396,8 @@ class SUNREFER_PREDET(SUNREFER):
             image_path = data['image_path']
             img = cv2.imread(image_path)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            pred_box[3:6] /= 2
+            pred_box[6] *= -1
 
             target_corners_2d, _ = sunrgbd_utils.compute_box_3d(target, data['calib_path'])
             pred_corners_2d, _ = sunrgbd_utils.compute_box_3d(pred_box, data['calib_path'])
@@ -398,7 +405,7 @@ class SUNREFER_PREDET(SUNREFER):
             img = sunrgbd_utils.draw_projected_box3d(img, target_corners_2d, (255, 0, 0), thickness=2)
             img = sunrgbd_utils.draw_projected_box3d(img, pred_corners_2d, (0, 255, 0), thickness=2)
 
-            filepath = os.path.join(base_path, f"{i}.jpg")
+            filepath = os.path.join(base_path, f"{idx}.jpg")
             # fig = plt.figure(figsize=())
             sentence = data['sentence']
             sentence = sentence.split()
@@ -414,4 +421,6 @@ class SUNREFER_PREDET(SUNREFER):
 
             plt.clf()
             plt.close()
+
+            idx += 1
         return

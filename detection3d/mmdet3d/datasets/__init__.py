@@ -30,6 +30,7 @@ from .utils import get_loading_pipeline
 from .waymo_dataset import WaymoDataset
 
 from .my_sunrgbd_dataset import MySUNRGBDDataset
+from .my_scannet_dataset import MyScanNetDataset
 
 __all__ = [
     'KittiDataset', 'KittiMonoDataset', 'build_dataloader', 'DATASETS',
@@ -46,5 +47,5 @@ __all__ = [
     'RandomJitterPoints', 'ObjectNameFilter', 'AffineResize',
     'RandomShiftScale', 'LoadPointsFromDict', 'PIPELINES',
     'RangeLimitedRandomCrop', 'RandomRotate', 'MultiViewWrapper',
-    'MySUNRGBDDataset'
+    'MySUNRGBDDataset', 'MyScanNetDataset'
 ]

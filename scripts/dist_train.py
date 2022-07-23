@@ -159,7 +159,6 @@ def validate(dataset, dataloader, model, criterion=None):
         max_index.append(index)
 
     max_index = np.hstack(max_index)
-    print(max_index.shape)
     acc25, acc50, m_iou = dataset.evaluate(max_index)
     if criterion:
         loss = loss / len(dataloader)
