@@ -251,6 +251,78 @@ class ScanNetDataset(Custom3DDataset):
             show_result(points, gt_bboxes, pred_bboxes, out_dir, file_name,
                         show)
 
+    def evaluate(self,
+                results,
+                metric=None,
+                iou_thr=(0.25, 0.5),
+                logger=None,
+                show=False,
+                out_dir=None,
+                pipeline=None):
+        """Evaluate.
+
+        Evaluation in indoor protocol.
+
+        Args:
+            results (list[dict]): List of results.
+            metric (str | list[str], optional): Metrics to be evaluated.
+                Defaults to None.
+            iou_thr (list[float]): AP IoU thresholds. Defaults to (0.25, 0.5).
+            logger (logging.Logger | str, optional): Logger used for printing
+                related information during evaluation. Defaults to None.
+            show (bool, optional): Whether to visualize.
+                Default: False.
+            out_dir (str, optional): Path to save the visualization results.
+                Default: None.
+            pipeline (list[dict], optional): raw data loading for showing.
+                Default: None.
+
+        Returns:
+            dict: Evaluation results.
+        """
+        from mmdet3d.core.evaluation import indoor_eval
+
+        RESULTS = True
+        if RESULTS:
+            import os 
+            from tqdm import tqdm
+
+            BASE_PATH = "../detection_results/scannet_whole_scene"
+            if not os.path.exists(BASE_PATH):
+                os.makedirs(BASE_PATH)
+
+            idx = 0
+            for r in tqdm(results):
+                info = self.data_infos[idx]
+                image_id = str(info['point_cloud']['lidar_idx'])
+                boxes = r['boxes_3d'].tensor.detach().numpy()
+                boxes[:, 2] += boxes[:, 5] / 2
+                # boxes_center = r['boxes_3d'].corners.detach().numpy()
+                boxes_path = os.path.join(BASE_PATH, f"{image_id}.npy")
+                np.save(boxes_path, boxes)
+                idx += 1
+            exit()
+
+        assert isinstance(
+            results, list), f'Expect results to be list, got {type(results)}.'
+        assert len(results) > 0, 'Expect length of results > 0.'
+        assert len(results) == len(self.data_infos)
+        assert isinstance(results[0], dict), f'Expect elements in results to be dict, got {type(results[0])}.'
+        gt_annos = [info['annos'] for info in self.data_infos]
+        label2cat = {i: cat_id for i, cat_id in enumerate(self.CLASSES)}
+
+        ret_dict = indoor_eval(
+            gt_annos,
+            results,
+            iou_thr,
+            label2cat,
+            logger=logger,
+            box_type_3d=self.box_type_3d,
+            box_mode_3d=self.box_mode_3d)
+        if show:
+            self.show(results, out_dir, pipeline=pipeline)
+
+        return ret_dict
 
 @DATASETS.register_module()
 @SEG_DATASETS.register_module()

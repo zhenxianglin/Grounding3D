@@ -136,3 +136,4 @@ mmdet3d/core/evaluation/waymo_utils/compute_detection_metrics_main
 
 # results and visualization
 results
+pretrained_model

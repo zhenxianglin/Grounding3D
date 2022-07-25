@@ -282,6 +282,31 @@ class MyScanNetDataset(Custom3DDataset):
             dict: Evaluation results.
         """
         from mmdet3d.core.evaluation import indoor_eval
+
+        RESULTS = True
+        if RESULTS:
+            import os 
+            from tqdm import tqdm
+
+            BASE_PATH = "../detection_results/scannet"
+            if not os.path.exists(BASE_PATH):
+                os.makedirs(BASE_PATH)
+
+            idx = 0
+            for r in tqdm(results):
+                info = self.data_infos[idx]
+                scene_id, pts_path = info['pts_path'][31:].split('/')
+                boxes = r['boxes_3d'].tensor.detach().numpy()
+                boxes[:, 2] += boxes[:, 5] / 2
+                if not os.path.exists(os.path.join(BASE_PATH, scene_id)):
+                    os.makedirs(os.path.join(BASE_PATH, scene_id))
+                
+                boxes_path = os.path.join(BASE_PATH, scene_id, pts_path)
+                np.save(boxes_path, boxes)
+                idx += 1
+            exit()
+
+
         assert isinstance(
             results, list), f'Expect results to be list, got {type(results)}.'
         assert len(results) > 0, 'Expect length of results > 0.'

@@ -9,4 +9,5 @@ pretrained_model/multi_task_model.bin
 __pycache__
 detection2d.zip
 detection3d.zip
+*.json
 

@@ -1,6 +1,7 @@
 # dataset settings
 dataset_type = 'ScanNetDataset'
-data_root = './data/scannet/'
+# data_root = './data/scannet/'
+data_root = '/remote-home/share/ScannetForScanrefer/'
 class_names = ('cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window',
                'bookshelf', 'picture', 'counter', 'desk', 'curtain',
                'refrigerator', 'showercurtrain', 'toilet', 'sink', 'bathtub',
@@ -101,7 +102,7 @@ data = dict(
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file=data_root + 'scannet_infos_train.pkl',
+            ann_file='./data/scannet/scannet_infos_train.pkl',
             pipeline=train_pipeline,
             filter_empty_gt=False,
             classes=class_names,
@@ -111,7 +112,8 @@ data = dict(
     val=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'scannet_infos_val.pkl',
+        # ann_file='./data/scannet/scannet_infos_train.pkl',
+        ann_file='./data/scannet/scannet_infos_val.pkl',
         pipeline=test_pipeline,
         classes=class_names,
         test_mode=True,
@@ -119,7 +121,8 @@ data = dict(
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'scannet_infos_val.pkl',
+        # ann_file='./data/scannet/scannet_infos_train.pkl',
+        ann_file='./data/scannet/scannet_infos_val.pkl',
         pipeline=test_pipeline,
         classes=class_names,
         test_mode=True,

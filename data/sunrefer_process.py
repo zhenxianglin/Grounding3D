@@ -53,6 +53,9 @@ def process(sunrefer, path):
             data['sentence'] = data['sentence']
 
         new_sunrefer.append(data)
+        for k, v in data.items():
+            print(f"{k}: {v}")
+        exit()
 
     with open(path, 'w') as fw:  # , encoding='utf-8'
         json.dump(new_sunrefer, fw)

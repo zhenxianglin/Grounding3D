@@ -424,6 +424,7 @@ class LoadPointsFromFile(object):
         if not pts_filename.endswith('.npy'):
             points = points.reshape(-1, self.load_dim)
         points = points[:, self.use_dim]
+
         attribute_dims = None
 
         if self.shift_height:
@@ -449,7 +450,6 @@ class LoadPointsFromFile(object):
         points = points_class(
             points, points_dim=points.shape[-1], attribute_dims=attribute_dims)
         results['points'] = points
-
         return results
 
     def __repr__(self):

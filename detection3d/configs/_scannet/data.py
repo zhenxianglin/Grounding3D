@@ -7,7 +7,7 @@ data_root = './data/scannet/'
 #                'garbagebin')
 class_names = ('objects', )
 num_points = 30000
-load_dim=8
+load_dim=6
 use_dim = [0, 1, 2]
 
 train_pipeline = [
@@ -106,7 +106,8 @@ data = dict(
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'scannet_det_val_2.pkl',
+        ann_file=data_root + 'scannet_det_train_2.pkl',
+        # ann_file=data_root + 'scannet_det_val_2.pkl',
         pipeline=test_pipeline,
         classes=class_names,
         test_mode=True,
