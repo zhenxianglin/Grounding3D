@@ -106,7 +106,20 @@ venv.bak/
 .mypy_cache/
 
 # cython generated cpp
-data
+data/lyft
+data/s3dis
+data/sunrgbd/matlab
+data/sunrgbd/OFFICIAL_SUNRGBD
+data/sunrgbd/points
+data/sunrgbd/sunrgbd_trainval
+data/sunrgbd/*.zip
+data/sunrgbd/*.pkl
+data/scannet/meta_data
+data/scannet/scannet_singleRGBD
+data/scannet/*.zip
+data/scannet/*.pkl
+demo
+tests
 .vscode
 .idea
 
