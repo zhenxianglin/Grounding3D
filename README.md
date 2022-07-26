@@ -36,7 +36,7 @@ Run scanrefer_proprocess.py and sunrefer_process.py in [data](./data).
 ```
 # Evaluation
 ```
-python scripts/test.py --dataset {dataset} --eval_path {model_path} --work_dir {work_dir}
+python scripts/test.py --dataset {dataset} --eval_path {model_path} --vis_path {vis_path}
 ```
 
 # Experiments Result
